@@ -25,7 +25,7 @@ I have scraped the archive of [Ergo-log](https://www.ergo-log.com/) and created 
 ### Details:
 - Code: [Github](https://github.com/ROpdam/ergo_bot)
 - Author: Robin Opdam
-- Contact: robinopdam@hotmail.com
+- Contact: [LinkedIn](https://www.linkedin.com/in/robinopdam/)
 - More projects: https://ropdam.github.io/
 
 

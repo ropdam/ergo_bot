@@ -1,6 +1,6 @@
 FROM python:3.10-slim-bullseye
 
-LABEL maintainer "Robin Opdam, robinopdam@hotmail.com"
+LABEL maintainer "Robin Opdam"
 
 ENV DB_LOCATION = db_faiss
 
