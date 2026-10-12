@@ -1,0 +1,11 @@
+# Build context is the repo root; only pyproject.toml, uv.lock, .python-version and project/app are needed.
+**
+!pyproject.toml
+!uv.lock
+!.python-version
+!project/app/
+**/__pycache__
+**/.env
+**/.files
+**/.chainlit/translations
+**/.DS_Store

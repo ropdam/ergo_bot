@@ -1,50 +1,50 @@
+"""Chainlit UI for Ergobot."""
+
+import asyncio
+import logging
+
 import chainlit as cl
-from functions import create_qa_chain, format_response
+from langchain_core.documents import Document
 
-# from prompt_testing import test_response
+from functions import format_sources, get_chain
 
+logger = logging.getLogger(__name__)
 
-@cl.on_chat_start
-async def init():
-    """"""
-    elements = [
-        cl.Text(
-            name="Example Questions",
-            content="""
-    Is ginger healthy? Why?
-    \n---
-    How to improve endurance?
-    \n---
-    What are health benefits of green tea and why?
-    \n---
-    Why do athletes eat bananas?
-    \n---
-    How to gain muscle mass?
-    \n---
-    """,
-        )
-    ]
-
-    await cl.Message(
-        content="""Hi! I am the [Ergolog](https://www.ergo-log.com/) assistant how can I help? (Example Questions)""",
-        elements=elements,
-    ).send()
-
-    cl.user_session.set("chain", create_qa_chain())
+EXAMPLE_QUESTIONS = [
+    "Is ginger healthy? Why?",
+    "How to improve endurance?",
+    "What are health benefits of green tea and why?",
+    "Why do athletes eat bananas?",
+    "How to gain muscle mass?",
+]
 
 
-@cl.on_message  # this function will be called every time a user inputs a message in the UI
-async def main(message: str):
-    chain = cl.user_session.get("chain")
-    response = await chain.acall(message)
-    response = format_response(response)
-    # response = format_response(test_response)
+@cl.set_starters
+async def set_starters(user: cl.User | None = None, language: str | None = None) -> list[cl.Starter]:
+    """Example questions shown on an empty thread."""
+    return [cl.Starter(label=question, message=question) for question in EXAMPLE_QUESTIONS]
 
-    await cl.Message(
-        author="Retriever",
-        content=response["article_names"],
-        elements=response["article_links"],
-        indent=1,
-    ).send()
 
-    await cl.Message(content=response["answer"], indent=0).send()
+async def show_sources(docs: list[Document]) -> None:
+    """Show the retrieved articles as a collapsible Retriever step."""
+    async with cl.Step(name="Retriever", type="retrieval", show_input=False) as step:
+        step.output = format_sources(docs) or "No articles found."
+
+
+@cl.on_message
+async def main(message: cl.Message) -> None:
+    question = message.content
+    try:
+        # First call loads the FAISS index from disk; keep it off the event loop.
+        chain = await asyncio.to_thread(get_chain)
+
+        answer = cl.Message(content="")
+        async for chunk in chain.astream(question):
+            if "context" in chunk:
+                await show_sources(chunk["context"])
+            if token := chunk.get("answer"):
+                await answer.stream_token(token)
+        await answer.send()
+    except Exception:
+        logger.exception("Failed to answer question")
+        await cl.ErrorMessage(content="Sorry, something went wrong while answering. Please try again.").send()

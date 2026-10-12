@@ -1,32 +1,36 @@
-# Use a named build stage to install build dependencies and Python libraries
-FROM python:3.10-slim-bullseye AS build
+# Build from the repo root: docker build -f project/Dockerfile.prod .
+
+# --- Build stage: install runtime dependencies from uv.lock ---
+FROM python:3.13-slim AS build
 
 LABEL maintainer="Robin Opdam"
 
-# Update packages and install build-essential in a single step to reduce layers
-RUN apt-get update -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /bin/uv
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/usr/src/.venv
 
-# Upgrade pip and install Python dependencies
-COPY requirements.txt /
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r /requirements.txt
+WORKDIR /usr/src
+COPY pyproject.toml uv.lock .python-version ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-default-groups --no-install-project
 
-# Begin the final image
-FROM python:3.10-slim-bullseye
+# --- Runtime stage ---
+FROM python:3.13-slim
 
-# Copy over the Python environment from the build image
-COPY --from=build /usr/local /usr/local
+RUN useradd --create-home app && install -d -o app /usr/src/app
 
-# Set environment variables and working directory
-ENV DB_LOCATION=db_faiss_OAI HOST=0.0.0.0 LISTEN_PORT=8000
+# Same path as in the build stage: the venv's scripts use absolute shebangs
+COPY --from=build /usr/src/.venv /usr/src/.venv
+ENV PATH=/usr/src/.venv/bin:$PATH \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /usr/src/app
+# Chainlit writes translations and uploaded files into the app dir at runtime
+COPY --chown=app project/app/ ./
+USER app
 
-# Copy the app files
-COPY /app /usr/src/app/
-
-# Expose the application's port
 EXPOSE 8000
 
-CMD ["chainlit", "run", "app.py"]
+CMD ["chainlit", "run", "app.py", "--headless", "--host", "0.0.0.0", "--port", "8000"]

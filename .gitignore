@@ -1,6 +1,16 @@
 __pycache__/
+.venv/
+.ruff_cache/
+.pytest_cache/
 
 *.env
 .DS_Store
 *.ipynb_checkpoints
 TODO.txt
+
+# Chainlit runtime files (regenerated on start)
+**/.chainlit/translations/
+**/.files/
+
+# Scraper output and HTML cache (regenerate with `make scrape`)
+project/scraping/data/

@@ -1,0 +1,49 @@
+[project]
+name = "ergobot"
+version = "2.0.0"
+description = "RAG chatbot over the Ergo-Log article archive"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "chainlit>=2.12.0",
+    "faiss-cpu>=1.15.1",
+    "langchain-community>=0.4.2",
+    "langchain-core>=1.6.9",
+    "langchain-openai>=1.7.0",
+    "python-dotenv>=1.2.4",
+]
+
+[tool.uv]
+package = false
+default-groups = ["dev", "scrape"]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.17.0",
+]
+scrape = [
+    "beautifulsoup4>=4.15.0",
+    "langchain-text-splitters>=1.1.3",
+    "lxml>=6.1.3",
+    "pandas>=3.0.6",
+    "pyarrow>=26.0.0",
+    "requests>=2.34.2",
+    "tqdm>=4.70.1",
+]
+
+[tool.ruff]
+line-length = 119
+target-version = "py313"
+# app/ and scraping/ are script directories: treat their modules as first-party for import sorting
+src = ["project/app", "project/scraping", "project/tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC"]
+
+[tool.pytest.ini_options]
+testpaths = ["project/tests"]
+pythonpath = ["project/app", "project/scraping", "project/tests"]
+asyncio_mode = "auto"
