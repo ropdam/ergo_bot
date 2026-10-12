@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop]
+  workflow_call:
+
+jobs:
+  lint-test:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Ruff
+        run: |
+          uv run ruff check
+          uv run ruff format --check
+      - name: Pytest
+        run: uv run pytest
+
+  docker-smoke:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build -f project/Dockerfile.prod -t ergobot:ci .
+      - name: Start container
+        run: docker run -d --name ergobot -e OPENAI_API_KEY=sk-dummy -p 8000:8000 ergobot:ci
+      - name: Wait for Chainlit to respond
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://localhost:8000/ && exit 0
+            sleep 2
+          done
+          docker logs ergobot
+          exit 1
+      - name: Shipped FAISS index loads with the locked dependencies
+        run: docker exec ergobot python -c "from functions import get_vectorstore; print('vectors:', get_vectorstore().index.ntotal)"
+      - name: Container logs
+        if: always()
+        run: docker logs ergobot

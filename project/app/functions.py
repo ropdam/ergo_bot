@@ -1,103 +1,98 @@
-import os
-from typing import Union
+"""Retrieval-augmented QA chain over the Ergo-Log article archive."""
 
-import chainlit as cl
+import json
+from datetime import date
+from functools import lru_cache
+from pathlib import Path
+
 from dotenv import load_dotenv
-from langchain.chains import RetrievalQA
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings import OpenAIEmbeddings
-
-# from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
-from langchain.prompts import PromptTemplate
-from langchain.vectorstores import FAISS
-
-prompt_template = """Use the following pieces of context to answer
-the question at the end. If you don't know the answer, just
-say that you don't know, don't try to make up an answer.
-
-{context}
-
-Question: {question}
-Answer using bullet points:"""
-
-PROMPT = PromptTemplate(
-    template=prompt_template, input_variables=["context", "question"]
-)
-chain_type_kwargs = {"prompt": PROMPT}
-k = 5
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+from langchain_core.language_models import BaseChatModel
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.runnables import Runnable, RunnableLambda, RunnableParallel, RunnablePassthrough
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 load_dotenv()
-db_location = os.getenv("DB_LOCATION")
 
-# OpenAI embeddings
-# embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
-embedding_function = OpenAIEmbeddings()
+APP_DIR = Path(__file__).parent
+DB_PATH = APP_DIR / "db_faiss_OAI"
+MODEL = "gpt-6-luna"
+K = 5
+MANIFEST_NAME = "manifest.json"
 
-vectordb = FAISS.load_local(db_location, embedding_function)
-retriever = vectordb.as_retriever(search_kwargs={"k": k})
+SYSTEM_PROMPT = """You are Ergobot, an assistant that answers questions using articles from the \
+Ergo-Log archive (https://www.ergo-log.com/), a news site about ergogenic aids studies.
+
+Rules:
+- Answer only using the Ergo-Log articles provided below.
+- Answer using bullet points, include a link to the article for each point.
+- If the articles do not contain the answer, say that you don't know. Don't try to make up an answer.
+
+Ergo-Log articles:
+{context}"""
+
+PROMPT = ChatPromptTemplate.from_messages([("system", SYSTEM_PROMPT), ("human", "{question}")])
 
 
-def create_qa_chain() -> RetrievalQA:
-    """
-    Creates a question-answering (QA) chain using the RetrievalQA framework.
+def get_vectorstore() -> FAISS:
+    """Load the FAISS index with the embedding model recorded in its manifest."""
+    manifest_file = DB_PATH / MANIFEST_NAME
+    if not manifest_file.is_file():
+        raise RuntimeError(
+            f"No index manifest found at {manifest_file}. Build the index first with `make index` "
+            "(or `uv run python project/scraping/build_index.py`)."
+        )
+    manifest = json.loads(manifest_file.read_text())
+    embeddings = OpenAIEmbeddings(model=manifest["embedding_model"])
+    # Unpickling is only safe because we build index.pkl ourselves (project/scraping/build_index.py).
+    return FAISS.load_local(str(DB_PATH), embeddings, allow_dangerous_deserialization=True)
 
-    This function initializes a RetrievalQA object with specified parameters.
-    It uses the ChatOpenAI model (specifically gpt-3.5-turbo) as its language model (llm) and
-    specifies a custom chain type for processing.
 
-    Returns:
-        RetrievalQA: An instance of the RetrievalQA class configured with the specified parameters.
-    """
-    return RetrievalQA.from_chain_type(
-        llm=ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo"),
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
-        verbose=False,
-        chain_type_kwargs=chain_type_kwargs,
+def format_docs(docs: list[Document]) -> str:
+    """Render retrieved documents as prompt context."""
+    return "\n\n".join(
+        f"### {doc.metadata.get('article_title', 'Untitled')} ({doc.metadata.get('article_date') or 'date unknown'})\n"
+        f"{doc.page_content}"
+        for doc in docs
     )
 
 
-def get_article_links(docs: list) -> Union[list, list]:
+def build_chain(retriever: BaseRetriever, llm: BaseChatModel) -> Runnable:
+    """LCEL chain: question str -> {"question", "context", "answer"}.
+
+    When streamed, the `context` chunk is emitted before any `answer` token chunks.
     """
-    Formats a list of document objects into markdown-style article links.
-
-    Args:
-        docs (list): Documents with 'article_title' and 'article_link' in their metadata.
-
-    Returns:
-        tuple: Contains a formatted list of articles as cl.Text and their collective title.
-    """
-    article_names = "Ergolog Articles"
-    content = ""
-    for idx, doc in enumerate(docs):
-        link_name = f" Article {idx+1} "
-        content += (
-            "\n"
-            + "{}\n[{}]({})".format(
-                doc.metadata["article_title"], link_name, doc.metadata["article_link"]
-            )
-            + "\n"
-        )
-
-    return [cl.Text(name=article_names, content=content)], article_names
+    answer = (
+        RunnableLambda(lambda x: {"context": format_docs(x["context"]), "question": x["question"]})
+        | PROMPT
+        | llm
+        | StrOutputParser()
+    )
+    return RunnableParallel(context=retriever, question=RunnablePassthrough()).assign(answer=answer)
 
 
-def format_response(llm_response: dict) -> dict:
-    """
-    Transforms a language model's response into a dictionary with structured data.
+@lru_cache(maxsize=1)
+def get_chain() -> Runnable:
+    """The app's chain, built once per process and shared across sessions."""
+    retriever = get_vectorstore().as_retriever(search_kwargs={"k": K})
+    return build_chain(retriever, ChatOpenAI(model=MODEL))
 
-    Args:
-        llm_response (dict): Response from a language model, including 'result' and 'source_documents'.
 
-    Returns:
-        dict: Dictionary with 'answer' from the LLM, and 'article_links' and
-        'article_names' extracted from source documents.
-    """
-    article_links, article_names = get_article_links(llm_response["source_documents"])
-
-    return {
-        "answer": llm_response["result"],
-        "article_links": article_links,
-        "article_names": article_names,
-    }
+def format_sources(docs: list[Document]) -> str:
+    """Numbered markdown list of unique source articles, in retrieval order."""
+    seen: set[str] = set()
+    lines: list[str] = []
+    for doc in docs:
+        meta = doc.metadata
+        link = meta["article_link"]
+        if link in seen:
+            continue
+        seen.add(link)
+        entry = f"[{meta['article_title']}]({link})"
+        if article_date := meta.get("article_date"):
+            entry += f" — {date.fromisoformat(article_date):%d-%m-%Y}"
+        lines.append(f"{len(lines) + 1}. {entry}")
+    return "\n".join(lines)

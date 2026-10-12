@@ -1,0 +1,7 @@
+{
+  "embedding_model": "text-embedding-3-small",
+  "dimensions": 1536,
+  "n_vectors": 4258,
+  "n_articles": 4255,
+  "built_at": "2026-10-11T21:01:56+00:00"
+}

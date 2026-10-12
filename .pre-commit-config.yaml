@@ -1,20 +1,23 @@
 repos:
--   repo: https://github.com/pycqa/flake8
-    rev: 6.0.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
     hooks:
-    -   id: flake8
-        exclude: project/app/app.py
-        args: ['--config=setup.cfg']
--   repo: https://github.com/pycqa/isort
-    rev: 5.12.0
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.13.0
     hooks:
-      - id: isort
-        name: isort (python)
--   repo: https://github.com/ambv/black
-    rev: 23.7.0
+      - id: uv-lock
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-    -   id: black
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
-    hooks:
-    -   id: detect-private-key
+      - id: detect-private-key
+      - id: check-added-large-files
+        exclude: ^project/app/db_faiss_OAI/
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+        exclude: ^project/tests/fixtures/html/
+      - id: trailing-whitespace
+        exclude: ^project/tests/fixtures/html/
