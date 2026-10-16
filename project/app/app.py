@@ -6,7 +6,7 @@ import logging
 import chainlit as cl
 from langchain_core.documents import Document
 
-from functions import format_sources, get_chain
+from functions import format_sources, get_agent
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ async def set_starters(user: cl.User | None = None, language: str | None = None)
 
 async def show_sources(docs: list[Document]) -> None:
     """Show the retrieved articles as a collapsible Retriever step."""
-    async with cl.Step(name="Retriever", type="retrieval", show_input=False) as step:
+    async with cl.Step(name="Retriever", type="tool", show_input=False) as step:
         step.output = format_sources(docs) or "No articles found."
 
 
@@ -36,10 +36,15 @@ async def main(message: cl.Message) -> None:
     question = message.content
     try:
         # First call loads the FAISS index from disk; keep it off the event loop.
-        chain = await asyncio.to_thread(get_chain)
+        agent = await asyncio.to_thread(get_agent)
+    except Exception:
+        logger.exception("Failed to load agent")
+        await cl.ErrorMessage(content="Sorry, something went wrong while answering. Please try again.").send()
+        return
 
-        answer = cl.Message(content="")
-        async for chunk in chain.astream(question):
+    answer = cl.Message(content="")
+    try:
+        async for chunk in agent.astream(question):
             if "context" in chunk:
                 await show_sources(chunk["context"])
             if token := chunk.get("answer"):

@@ -1,7 +1,7 @@
 # Ergobot
 
-RAG chatbot over the [Ergo-Log](https://www.ergo-log.com/) archive: Chainlit UI (`project/app/`), LangChain LCEL chain
-with FAISS + OpenAI `gpt-6-luna`, scraper/indexer in `project/scraping/`, deployed on Cloud Run.
+RAG chatbot over the [Ergo-Log](https://www.ergo-log.com/) archive: Chainlit UI (`project/app/`), tool-calling agent
+with FAISS retriever tool + OpenAI `gpt-6-luna`, scraper/indexer in `project/scraping/`, deployed on Cloud Run.
 Follow the `karpathy-guidelines` skill: simplest code that works, surgical changes, verify with tests.
 
 ## Rules
@@ -12,7 +12,8 @@ Follow the `karpathy-guidelines` skill: simplest code that works, surgical chang
 ## Non-obvious contracts
 - Index (`project/app/db_faiss_OAI/`, committed) must have `manifest.json`; the app embeds queries with its `embedding_model` and refuses an index without one (prevents silent ada-002 vs 3-small mismatch, both 1536-dim). `index.pkl` is a pickle: only load indexes we built.
 - Document metadata used by the app: `article_title`, `article_link`, `article_date` (ISO string). One doc per article; only articles >6000 chars are split (`chunk` key). Empty `categories` on pre-~2015 pages is expected.
-- When streamed, the chain emits the `context` chunk before answer tokens; `app.py` relies on this to show sources first.
+- Retriever is a tool (`search_ergo_log`); tool output includes `URL: {article_link}` so the agent can cite real links.
+- When streamed, the agent emits `context` (tool artifacts) before answer tokens; `app.py` relies on this to show sources first.
 - Model, k and embedding model are constants in code, not env vars (deliberately: gpt-6-luna streams fine with default params). Only `OPENAI_API_KEY` comes from the environment.
 
 ## Scraping ergo-log.com

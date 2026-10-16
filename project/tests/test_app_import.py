@@ -36,9 +36,8 @@ async def test_starters(app):
     assert all(s.label == s.message for s in starters)
 
 
-class FakeChain:
+class FakeAgent:
     async def astream(self, question):
-        yield {"question": question}
         yield {"context": EXAMPLE_OUTPUT["context"]}
         for token in ("- Green ", "tea"):
             yield {"answer": token}
@@ -81,11 +80,11 @@ def ui(app, monkeypatch):
 
 
 async def test_main_streams_sources_then_answer(app, ui, monkeypatch):
-    monkeypatch.setattr(app, "get_chain", FakeChain)
+    monkeypatch.setattr(app, "get_agent", FakeAgent)
 
     await app.main(app.cl.Message(content="green tea?"))
 
-    assert ui[0][:3] == ("step", "Retriever", "retrieval")
+    assert ui[0][:3] == ("step", "Retriever", "tool")
     assert ui[0][3].startswith("1. [Green tea extract")
     assert ui[1:] == [("token", "- Green "), ("token", "tea"), ("message", "- Green tea")]
 
@@ -93,7 +92,7 @@ async def test_main_streams_sources_then_answer(app, ui, monkeypatch):
 async def test_main_reports_missing_index(app, ui, monkeypatch, tmp_path):
     import functions
 
-    functions.get_chain.cache_clear()
+    functions.get_agent.cache_clear()
     monkeypatch.setattr(functions, "DB_PATH", tmp_path)
 
     await app.main(app.cl.Message(content="green tea?"))

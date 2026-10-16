@@ -1,4 +1,4 @@
-from functions import format_docs, format_sources
+from functions import format_docs, format_sources, rewrite_citations
 from sample_docs import BANANA_LINK, DOCS, EXAMPLE_OUTPUT, GINGER_LINK, GREEN_TEA_LINK
 
 
@@ -31,7 +31,33 @@ def test_empty():
 
 
 def test_format_docs_for_prompt():
-    text = format_docs(DOCS[:1])
+    text = format_docs(DOCS[:2])  # two chunks, same article → one link
+    title = "Green tea extract boosts fat burning during exercise"
 
-    assert text.startswith("### Green tea extract boosts fat burning during exercise (2010-03-14)\n")
+    assert text.startswith("Links (copy exactly):\n")
+    assert text.count(f"- [{title}]({GREEN_TEA_LINK})") == 1
+    assert f"### {title} (2010-03-14)\n" in text
     assert "EGCG" in text
+
+
+def test_rewrite_citations_fixes_invented_url():
+    docs = DOCS[:1]
+    title = docs[0].metadata["article_title"]
+    invented = "https://www.ergo-log.com/green-tea-extract-boosts-fat-burning-slugified-wrong.html"
+    answer = f"- Point. [{title}]({invented})"
+
+    fixed = rewrite_citations(answer, docs)
+
+    assert GREEN_TEA_LINK in fixed
+    assert invented not in fixed
+
+
+def test_rewrite_citations_matches_title_prefix():
+    docs = DOCS[:1]
+    title = docs[0].metadata["article_title"]
+    invented = "https://www.ergo-log.com/made-up-slug.html"
+    answer = f"- Point. [{title[:20]}]({invented})"
+
+    fixed = rewrite_citations(answer, docs)
+
+    assert f"[{title}]({GREEN_TEA_LINK})" in fixed
