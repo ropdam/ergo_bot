@@ -1,6 +1,7 @@
 """Agent over the Ergo-Log article archive, with FAISS retrieval as a tool."""
 
 import json
+import os
 import re
 from collections.abc import AsyncIterator
 from datetime import date
@@ -20,7 +21,10 @@ load_dotenv()
 
 APP_DIR = Path(__file__).parent
 DB_PATH = APP_DIR / "db_faiss_OAI"
-MODEL = "gpt-6-luna"
+# ETHUX: OpenAI-compatible API for open models (https://docs.ethux.net/). Query embeddings still go to OpenAI,
+# because the committed index was built with OpenAI's embedding model (see manifest.json).
+MODEL = "qwen3.8-27b"
+LLM_BASE_URL = "https://api.ethux.net/v1"
 K = 5
 MANIFEST_NAME = "manifest.json"
 RETRIEVER_TOOL_NAME = "search_ergo_log"
@@ -36,6 +40,7 @@ When you answer from articles:
 - Use only what the tool returned.
 - Copy markdown links from the tool's Links section exactly — never invent or rewrite URLs.
 - Use bullet points; paste one of those links on each point.
+- Keep it short: at most 3-5 bullets of one or two sentences each, no intro or summary.
 - If you don't know, say so. Don't invent answers."""
 
 
@@ -173,7 +178,8 @@ class ErgobotAgent:
 def get_agent() -> ErgobotAgent:
     """The app's agent, built once per process and shared across sessions."""
     retriever = get_vectorstore().as_retriever(search_kwargs={"k": K})
-    return ErgobotAgent(ChatOpenAI(model=MODEL), build_retriever_tool(retriever))
+    llm = ChatOpenAI(model=MODEL, base_url=LLM_BASE_URL, api_key=os.environ["ETHUX_API_KEY"])
+    return ErgobotAgent(llm, build_retriever_tool(retriever))
 
 
 def format_sources(docs: list[Document]) -> str:
