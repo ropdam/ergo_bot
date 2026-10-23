@@ -2,8 +2,8 @@
 
 A chatbot that answers questions using the archived articles of [Ergo-Log](https://www.ergo-log.com/).
 Questions are matched against a FAISS index of all scraped articles; the best matches are passed to an
-OpenAI model (`gpt-6-luna`, set in `project/app/functions.py`) that answers in bullet points and links the
-source articles.
+open model (`qwen3.8-27b` on [ETHUX](https://docs.ethux.net/), set in `project/app/functions.py`) that answers in
+bullet points and links the source articles.
 
 - UI: [Chainlit](https://chainlit.io/) (`project/app/app.py`)
 - RAG chain: LangChain (LCEL) with `langchain-openai` + FAISS (`project/app/functions.py`)
@@ -22,7 +22,7 @@ uv sync
 cp .env.example .env
 ```
 
-Then set `OPENAI_API_KEY` in `.env`.
+Then set `ETHUX_API_KEY` (chat model) and `OPENAI_API_KEY` (embeddings) in `.env`.
 
 Dependencies live in [pyproject.toml](pyproject.toml) and are locked in `uv.lock`: runtime deps are the
 project dependencies (the only ones installed in the Docker image); the `scrape` and `dev` groups are installed
@@ -90,7 +90,7 @@ make lint test
   on pull requests and pushes to `develop`.
 - `.github/workflows/deploy.yml` runs CI, builds `project/Dockerfile.prod` and deploys it to the Cloud Run service
   `ergobot-image` (europe-west4) on every push to `master`. It needs the `GCP_PROJECT_ID` and `GCP_CREDENTIALS`
-  repository secrets. `OPENAI_API_KEY` is configured on the Cloud Run service itself.
+  repository secrets. `ETHUX_API_KEY` and `OPENAI_API_KEY` are configured on the Cloud Run service itself.
 
 ## Notes
 

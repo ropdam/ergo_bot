@@ -1,7 +1,7 @@
 # Ergobot
 
 RAG chatbot over the [Ergo-Log](https://www.ergo-log.com/) archive: Chainlit UI (`project/app/`), tool-calling agent
-with FAISS retriever tool + OpenAI `gpt-6-luna`, scraper/indexer in `project/scraping/`, deployed on Cloud Run.
+with FAISS retriever tool + `qwen3.8-27b` on ETHUX (OpenAI-compatible API), scraper/indexer in `project/scraping/`, deployed on Cloud Run.
 Follow the `karpathy-guidelines` skill: simplest code that works, surgical changes, verify with tests.
 
 ## Rules
@@ -14,7 +14,7 @@ Follow the `karpathy-guidelines` skill: simplest code that works, surgical chang
 - Document metadata used by the app: `article_title`, `article_link`, `article_date` (ISO string). One doc per article; only articles >6000 chars are split (`chunk` key). Empty `categories` on pre-~2015 pages is expected.
 - Retriever is a tool (`search_ergo_log`); tool output includes `URL: {article_link}` so the agent can cite real links.
 - When streamed, the agent emits `context` (tool artifacts) before answer tokens; `app.py` relies on this to show sources first.
-- Model, k and embedding model are constants in code, not env vars (deliberately: gpt-6-luna streams fine with default params). Only `OPENAI_API_KEY` comes from the environment.
+- Model, base URL, k and embedding model are constants in code, not env vars. Only API keys come from the environment: `ETHUX_API_KEY` (chat, `ChatOpenAI` with ETHUX `base_url`) and `OPENAI_API_KEY` (query embeddings; the index was built with OpenAI's `text-embedding-3-small`).
 
 ## Scraping ergo-log.com
 - Hand-written HTML without charset: old pages windows-1252, new UTF-8. Decode raw bytes with `ergolog.decode`, never `response.text`.
@@ -24,7 +24,7 @@ Follow the `karpathy-guidelines` skill: simplest code that works, surgical chang
 
 ## Deployment
 - Push to `master` deploys (`deploy.yml` → reuses `ci.yml` → Cloud Run `ergobot-image`, europe-west4). Flow: feature branch → `develop` → `master`.
-- Docker build context is the repo root; `.dockerignore` is an allowlist. `OPENAI_API_KEY` lives on the Cloud Run service, not in GitHub.
+- Docker build context is the repo root; `.dockerignore` is an allowlist. `ETHUX_API_KEY` and `OPENAI_API_KEY` live on the Cloud Run service, not in GitHub.
 - CI's docker smoke test asserts the shipped index loads, so it fails until the index is rebuilt with a manifest.
 
 ## Gotchas

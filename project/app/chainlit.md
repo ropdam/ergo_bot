@@ -8,7 +8,7 @@ As a fan of [ergo-log](https://www.ergo-log.com/) and [ergogenics](https://www.e
 
 ## How does it work?
 I have scraped the archive of [Ergo-log](https://www.ergo-log.com/) (2008–present) and created a database. The database is refreshed by re-scraping the archive. When asking Ergobot a question the following steps are taken:
-1. An [OpenAI](https://openai.com/) model (gpt-6-luna) searches the archived articles via a retrieval tool.
+1. An open model (qwen3.8-27b), powered by [ETHUX](https://ethux.net) on their own GPUs in the Netherlands, searches the archived articles via a retrieval tool.
 2. The model answers using only the returned articles (including their URLs).
 3. The answer is shown in the chat window, together with links to the articles it was based on.
 
